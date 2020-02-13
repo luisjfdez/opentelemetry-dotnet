@@ -66,7 +66,7 @@ namespace OpenTelemetry.Exporter.Jaeger.Implementation
 
             this.maxFlushIntervalTimer.Elapsed += async (sender, args) =>
             {
-                await this.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                await this.LockedFlushAsync(CancellationToken.None).ConfigureAwait(false);
             };
         }
 
@@ -148,12 +148,25 @@ namespace OpenTelemetry.Exporter.Jaeger.Implementation
             }
         }
 
-        public virtual Task<int> CloseAsync(CancellationToken cancellationToken) => this.FlushAsync(cancellationToken);
+        public virtual Task<int> CloseAsync(CancellationToken cancellationToken) => this.LockedFlushAsync(cancellationToken);
 
         public void Dispose()
         {
             // Do not change this code. Put cleanup code in Dispose(bool disposing).
             this.Dispose(true);
+        }
+
+        protected async Task<int> LockedFlushAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await this.flushLock.WaitAsync().ConfigureAwait(false);
+                return await this.FlushAsync(cancellationToken);
+            }
+            finally
+            {
+                this.flushLock.Release();
+            }
         }
 
         protected async Task SendAsync(Process process, List<JaegerSpan> spans, CancellationToken cancellationToken)
