@@ -117,35 +117,26 @@ namespace OpenTelemetry.Exporter.Jaeger.Implementation
 
         public async Task<int> FlushAsync(CancellationToken cancellationToken)
         {
+            this.maxFlushIntervalTimer.Enabled = false;
+
+            int n = this.currentBatch.Count;
+
+            if (n == 0)
+            {
+                return 0;
+            }
+
             try
             {
-                await this.flushLock.WaitAsync().ConfigureAwait(false);
-
-                this.maxFlushIntervalTimer.Enabled = false;
-
-                int n = this.currentBatch.Count;
-
-                if (n == 0)
-                {
-                    return 0;
-                }
-
-                try
-                {
-                    await this.SendAsync(this.Process, this.currentBatch, cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    this.currentBatch.Clear();
-                    this.batchByteSize = this.processByteSize.Value;
-                }
-
-                return n;
+                await this.SendAsync(this.Process, this.currentBatch, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                this.flushLock.Release();
+                this.currentBatch.Clear();
+                this.batchByteSize = this.processByteSize.Value;
             }
+
+            return n;
         }
 
         public virtual Task<int> CloseAsync(CancellationToken cancellationToken) => this.LockedFlushAsync(cancellationToken);
@@ -158,9 +149,9 @@ namespace OpenTelemetry.Exporter.Jaeger.Implementation
 
         protected async Task<int> LockedFlushAsync(CancellationToken cancellationToken)
         {
+            await this.flushLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await this.flushLock.WaitAsync().ConfigureAwait(false);
                 return await this.FlushAsync(cancellationToken);
             }
             finally
