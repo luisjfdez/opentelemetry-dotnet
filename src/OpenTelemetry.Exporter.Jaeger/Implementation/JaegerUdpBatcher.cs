@@ -149,9 +149,9 @@ namespace OpenTelemetry.Exporter.Jaeger.Implementation
 
         protected async Task<int> LockedFlushAsync(CancellationToken cancellationToken)
         {
+            await this.flushLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await this.flushLock.WaitAsync().ConfigureAwait(false);
                 return await this.FlushAsync(cancellationToken);
             }
             finally
